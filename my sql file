@@ -1,0 +1,57 @@
+ALTER FUNCTION GetTableCollist (@TableName VARCHAR(50), @ExcludedColumns VARCHAR(max))  
+RETURNS NVARCHAR(MAX)  
+as
+Begin
+
+	Declare @ReturnStr NVARCHAR(MAX) =''  	 
+			,@Query nvarchar(max)=''
+			,@Col nvarchar(max)=''
+
+	Declare @TblCols TABLE (ColName VARCHAR(MAX))
+	 
+	SET @Query=N'
+		SELECT 
+			@COLSUNPIVOT=STUFF(
+							(SELECT '+CHAR(39)+','+CHAR(39)+'+ COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS  WHERE TABLE_NAME='+CHAR(39)+@TableName+CHAR(39)+' FOR XML PATH (' +CHAR(39)+''+CHAR(39)+'))
+								, 1, 1, ' +CHAR(39)+''+CHAR(39)+ '
+							)'    
+ 
+ 
+	execute sp_executesql @Query, N'@COLSUNPIVOT NVARCHAR(MAX) output', 
+	@COLSUNPIVOT = @COLSUNPIVOT OUTPUT
+
+	insert into @TBLCOLS 
+	SELECT ITEMS FROM PrgFn_Split(@COLSUNPIVOT,',')
+
+	SELECT @ReturnStr=  STUFF(REPLACE((SELECT ',' + COLNAME FROM @TBLCOLS WHERE COLNAME not in ( SELECT ITEMS FROM PrgFn_Split(@ExcludedColumns,','))
+	FOR XML PATH('')),' ,',', '), 1, 1, '')  
+
+	RETURN @ReturnStr   
+end
+
+if exists(select * from tempdb..##tmp1)
+drop table ##tmp1
+ DECLARE  
+       @query nvarchar(max),
+       @tblname nvarchar(max), 
+       @colsUnpIvot nvarchar(max)='',
+	   @unwnatedcols nvarchar(max)='REC_NO,REC_DATE,REC_USERNAME,REC_USERID,REC_UPDATE,REC_UPUSERNAME,REC_UPUSERID,REC_CHANGED,REC_LOCKED'
+
+       SET @tblname='TBLCARISB';
+	   
+  SET @query=N'
+       SELECT @COLSUNPIVOT=STUFF((SELECT '+CHAR(39)+','+CHAR(39)+'+ COLUMN_NAME FROM  INFORMATION_SCHEMA.COLUMNS  
+       WHERE TABLE_NAME='+CHAR(39)+@TBLNAME+CHAR(39)+' FOR XML PATH (' +CHAR(39)+''+CHAR(39)+')), 1, 1, ' +CHAR(39)+''+CHAR(39)+ ')  '    
+ 
+       execute sp_executesql @query, N'@COLSUNPIVOT NVARCHAR(MAX) output', 
+       @COLSUNPIVOT = @COLSUNPIVOT OUTPUT
+	 
+	   SELECT ITEMS into ##tmp1 FROM PrgFn_Split(@COLSUNPIVOT,',')
+ 
+
+
+SELECT   STUFF(REPLACE((SELECT ',' + ITEMS FROM ##tmp1 WHERE ITEMS not in ( SELECT ITEMS FROM PrgFn_Split(@unwnatedcols,','))
+FOR XML PATH('')),' ,',', '), 1, 1, '')  
+
+ select [dbo].[PrgFn_DBTableFieldsForSelect]('TBLFATSB','REC_NO,REC_USERID')
+  
